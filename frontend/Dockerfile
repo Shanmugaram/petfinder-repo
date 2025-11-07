@@ -6,7 +6,8 @@ COPY package.json package-lock.json* ./
 RUN npm ci
 COPY . .
 # build Angular (production)
-RUN npx ng build --configuration production
+#RUN npx ng build --configuration production
+RUN npx ng build
 
 # Stage 2 - nginx
 FROM nginx:stable-alpine AS prod
