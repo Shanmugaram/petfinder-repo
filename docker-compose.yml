@@ -1,0 +1,29 @@
+version: "3.8"
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    image: petfinder-backend:latest
+    # Using a command that writes console logs into mounted log file so monitor can read them
+    command: sh -c "node server.js 2>&1 | tee -a /var/log/petfinder/petfinder.log"
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./logs:/var/log/petfinder   # logs are stored on host -> scripts monitor this
+    environment:
+      - NODE_ENV=production
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    image: petfinder-frontend:latest
+    ports:
+      - "80:80"
+    restart: unless-stopped
+
+# optional: if you need a DB service, add here (Postgres, MongoDB)
+# volumes:
+#   db-data: {}

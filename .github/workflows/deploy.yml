@@ -1,0 +1,63 @@
+name: CI Build & Deploy to EC2
+
+on:
+  push:
+    branches: [ main ]
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    env:
+      BACKEND_DIR: backend
+      FRONTEND_DIR: frontend
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install backend deps & (optional) run tests
+        working-directory: ${{ env.BACKEND_DIR }}
+        run: |
+          npm ci
+          # if you have tests replace next line with npm test
+          echo "No backend unit tests present in repository"
+
+      - name: Build backend docker image
+        run: docker build -t petfinder-backend:latest ./backend
+
+      - name: Build frontend docker image
+        run: docker build -t petfinder-frontend:latest ./frontend
+
+      - name: Log in to DockerHub
+        uses: docker/login-action@v2
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Tag & push images to DockerHub
+        run: |
+          docker tag petfinder-backend:latest ${{ secrets.DOCKERHUB_USERNAME }}/petfinder-backend:latest
+          docker tag petfinder-frontend:latest ${{ secrets.DOCKERHUB_USERNAME }}/petfinder-frontend:latest
+          docker push ${{ secrets.DOCKERHUB_USERNAME }}/petfinder-backend:latest
+          docker push ${{ secrets.DOCKERHUB_USERNAME }}/petfinder-frontend:latest
+
+      - name: Deploy to EC2 (SSH)
+        uses: appleboy/ssh-action@v0.1.8
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          port: 22
+          script: |
+            cd /home/${{ secrets.EC2_USER }}/petfinder-repo || exit 1
+            git pull origin main || true
+            # If you prefer pulling images from DockerHub on EC2:
+            docker pull ${{ secrets.DOCKERHUB_USERNAME }}/petfinder-backend:latest || true
+            docker pull ${{ secrets.DOCKERHUB_USERNAME }}/petfinder-frontend:latest || true
+            docker compose down || true
+            docker compose up -d --build
